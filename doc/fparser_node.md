@@ -83,7 +83,8 @@ custom `match()` methods that return ad-hoc tuples.
 | `item` | `readfortran.Line` | `__new__` — carries label, name, span info |
 
 Direct-Base classes are the most heterogeneous: each defines its own `items`
-layout. This is where the bulk of the schema-registry work will be.
+layout. The fparser class is always recoverable via `getattr(Fortran2003, kind)`,
+so semantic edge names can be added incrementally per class.
 
 
 ### BlockBase

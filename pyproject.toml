@@ -1,7 +1,7 @@
 [project]
 name = "fcst"
 version = "0.1.0"
-description = "Add your description here"
+description = "Fortran Concrete Syntax Tree — unified node model over fparser"
 readme = "README.md"
 authors = [
     { name = "Wanli-Wylie", email = "zhang.wl.earth@gmail.com" }
@@ -11,6 +11,9 @@ dependencies = [
     "fparser>=0.2.1",
     "pydantic>=2.12.5",
 ]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
 
 [build-system]
 requires = ["uv_build>=0.10.4,<0.11.0"]

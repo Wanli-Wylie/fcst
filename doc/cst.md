@@ -84,8 +84,9 @@ Access: `node.children("stmt")` — returns ordered tuple of all matches.
 Maps to fparser's `content` list (variable-length, homogeneous role).
 
 The mode is **implicit** — determined by usage, not by a flag on the node.
-A schema registry (future work) will declare which `kind` values are
-structured and which are containers, along with their expected edge names.
+Since `kind` is the fparser class name (derived via `type(node).__name__`),
+the mode for any `kind` can be determined dynamically by inspecting the
+fparser class via `getattr(Fortran2003, kind)` — no static registry needed.
 
 
 ## Bidirectional navigation
@@ -156,8 +157,9 @@ Six functions in three files, each file named after its **target**:
 | `to_text.py` | `cst_to_str` | `(Node) -> str` | not yet implemented |
 
 Composed paths (`str_to_cst`, `cst_to_str`) are one-liners that chain the
-two atomic converters.  `cst_to_ast` (and therefore `cst_to_str`) requires
-the schema registry to reconstruct fparser classes from CST edges.
+two atomic converters.  `cst_to_ast` (and therefore `cst_to_str`) can
+reconstruct fparser classes via `getattr(Fortran2003, node.kind)` — the
+`kind` string is the class name by construction.
 
 ### ast_to_cst dispatch
 
@@ -188,9 +190,33 @@ with multiple inheritance (e.g. `Assignment_Stmt` is both `StmtBase` and
 `BinaryOpBase`) match the structural base class first.
 
 The generic fallback uses positional edge names (`item_0`, `item_1`, ...)
-so every fparser tree is convertible immediately.  A schema registry
-(future work) will replace positional names with semantic ones for the
-~175 direct-Base subclasses.
+so every fparser tree is convertible immediately.  Semantic edge names for
+the ~175 direct-Base subclasses can be added incrementally — the fparser
+class is always recoverable via `getattr(Fortran2003, kind)`.
+
+### Sentinel node kinds
+
+The generic fallback introduces two internal sentinel kinds to preserve
+the full positional structure of fparser's ``items`` tuples:
+
+| Kind | Meaning |
+|------|---------|
+| `__absent__` | Marks a `None` slot in the items tuple (empty optional). |
+| `__list__` | Wraps a nested list/tuple found in items; children are positional edges (`item_0`, `item_1`, …). |
+
+These sentinels ensure the reverse converter (`cst_to_ast`) can reconstruct
+items tuples with the correct length and nesting.  They appear **only**
+inside generic-fallback nodes, never inside structured-handler output.
+
+
+### cst_to_ast dispatch
+
+`cst_to_ast` mirrors `ast_to_cst`: it resolves the fparser class via
+`getattr(Fortran2003, node.kind)`, determines the structural base class
+with `issubclass`, and reconstructs `items` / `content` / `string`.
+For structured base classes the reverse mapping is hardcoded (same field
+names as the forward handler).  For the generic fallback, positional edges
+are converted back to an items tuple via `_to_item`.
 
 
 ## Source files

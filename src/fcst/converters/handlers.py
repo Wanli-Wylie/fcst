@@ -3,6 +3,14 @@
 Each handler knows the fixed slot semantics of its base class and produces
 edges with proper field names.  The ``recurse`` callback points back to
 :func:`~fcst.converters.to_cst.ast_to_cst` for child conversion.
+
+Two sentinel node kinds are used by the generic fallback:
+
+- ``__absent__`` — marks a None slot in the fparser ``items`` tuple, so
+  that positional structure (tuple length) is preserved for the reverse
+  converter.
+- ``__list__`` — wraps a list/tuple item found in ``items`` as a node
+  with positional child edges.
 """
 
 from __future__ import annotations
@@ -29,7 +37,8 @@ def _kind(node: Base) -> str:
 def _item_to_node(item: Any, recurse: Recurse) -> Node | None:
     """Convert one element of an fparser ``items`` tuple to a CST Node.
 
-    Returns None for absent optional slots (``None`` items).
+    Returns None only when *item* is None.  Lists/tuples produce a
+    ``__list__`` container node so that the structure round-trips.
     """
     if item is None:
         return None
@@ -37,6 +46,16 @@ def _item_to_node(item: Any, recurse: Recurse) -> Node | None:
         return recurse(item)
     if isinstance(item, str):
         return Node(kind="token", value=item)
+    if isinstance(item, (list, tuple)):
+        edges: list[Edge] = []
+        for i, sub in enumerate(item):
+            child = _item_to_node(sub, recurse)
+            if child is None:
+                child = Node(kind="__absent__")
+            edges.append(Edge(field_name=f"item_{i}", child=child))
+        if not edges:
+            return None
+        return Node(kind="__list__", edges=tuple(edges))
     raise TypeError(f"Unexpected item type: {type(item)!r}")
 
 
@@ -165,7 +184,12 @@ def convert_type_decl_stmt(node: Any, recurse: Recurse) -> Node:
 
 
 def convert_generic(node: Any, recurse: Recurse) -> Node:
-    """Fallback for direct-Base subclasses: positional edge names."""
+    """Fallback for direct-Base subclasses: positional edge names.
+
+    Unlike the structured handlers, this preserves **all** positional
+    slots (including Nones) so that the reverse converter can
+    reconstruct the correct-length ``items`` tuple.
+    """
     items = getattr(node, "items", None)
     if not items:
         s = getattr(node, "string", None)
@@ -175,20 +199,9 @@ def convert_generic(node: Any, recurse: Recurse) -> Node:
 
     edges: list[Edge] = []
     for i, item in enumerate(items):
-        if item is None:
-            continue
-        if isinstance(item, Base):
-            edges.append(Edge(field_name=f"item_{i}", child=recurse(item)))
-        elif isinstance(item, str):
-            edges.append(
-                Edge(field_name=f"item_{i}", child=Node(kind="token", value=item))
-            )
-        elif isinstance(item, (list, tuple)):
-            for j, sub in enumerate(item):
-                child = _item_to_node(sub, recurse)
-                if child is not None:
-                    edges.append(Edge(field_name=f"item_{i}_{j}", child=child))
+        child = _item_to_node(item, recurse)
+        if child is None:
+            child = Node(kind="__absent__")
+        edges.append(Edge(field_name=f"item_{i}", child=child))
 
-    if not edges:
-        return Node(kind=_kind(node))
     return Node(kind=_kind(node), edges=tuple(edges))

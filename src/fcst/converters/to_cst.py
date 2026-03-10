@@ -100,3 +100,22 @@ def str_to_cst(source: str, std: str = "f2003") -> Node:
     from fcst.converters.to_fparser import str_to_ast
 
     return ast_to_cst(str_to_ast(source, std=std))
+
+
+def parse_as(text: str, kind: str) -> Node:
+    """Parse a text fragment using a specific grammar production.
+
+    *kind* is the fparser class name (e.g. ``'Use_Stmt'``, ``'If_Construct'``).
+    The class is resolved via ``getattr(Fortran2003, kind)``; no registry needed.
+    """
+    from fparser.common.readfortran import FortranStringReader
+    from fparser.two import Fortran2003 as f03
+
+    cls = getattr(f03, kind, None)
+    if cls is None:
+        raise ValueError(f"Unknown grammar production: {kind!r}")
+    reader = FortranStringReader(text)
+    ast_node = cls(reader)
+    if ast_node is None:
+        raise ValueError(f"Failed to parse as {kind}: {text!r}")
+    return ast_to_cst(ast_node)
